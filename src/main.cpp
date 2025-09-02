@@ -6,6 +6,7 @@
 #include <WiFiManager.h>
 #include <PubSubClient.h>
 #include <time.h>
+#include <vector>
 
 // ================== Configuration model ==================
 struct AppConfig {
@@ -55,14 +56,6 @@ static int parseTimeToMinutes(const String &hhmm) {
   int mm = hhmm.substring(colon + 1).toInt();
   if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return -1;
   return hh * 60 + mm;
-}
-
-static String minutesToHHMM(int minutes) {
-  int hh = minutes / 60;
-  int mm = minutes % 60;
-  char buf[6];
-  snprintf(buf, sizeof(buf), "%02d:%02d", hh, mm);
-  return String(buf);
 }
 
 static String htmlEscape(const String &in) {
@@ -462,8 +455,10 @@ void handleConfigPost() {
     config.triggerActiveHigh = high;
   }
   if (server.hasArg("pulseMs")) {
-    uint32_t ms = max(1, server.arg("pulseMs").toInt());
-    config.triggerDurationMs = ms;
+    long ms_in = server.arg("pulseMs").toInt();
+    if (ms_in < 1) ms_in = 1;               // enforce minimum 1 ms
+    if (ms_in > 600000) ms_in = 600000;     // clamp to 10 minutes
+    config.triggerDurationMs = (uint32_t)ms_in;
   }
   if (server.hasArg("mqttHost")) {
     String newHost = server.arg("mqttHost");
@@ -549,7 +544,6 @@ void setupWebServer() {
 void setupWiFi() {
   WiFi.mode(WIFI_STA);
   WiFiManager wm;
-  wm.setConfigPortalBlocking(true);
   wm.setConfigPortalTimeout(180); // 3 minutes
   String apName = "Diffuser-" + String(ESP.getChipId(), HEX);
   if (!wm.autoConnect(apName.c_str())) {
